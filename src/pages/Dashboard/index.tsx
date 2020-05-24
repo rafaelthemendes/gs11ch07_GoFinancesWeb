@@ -1,16 +1,12 @@
-import React, { useState, useEffect } from 'react';
-
-import income from '../../assets/income.svg';
-import outcome from '../../assets/outcome.svg';
-import total from '../../assets/total.svg';
-
-import api from '../../services/api';
-
+import { format } from 'date-fns';
+import React, { useEffect, useState } from 'react';
+import incomeIcon from '../../assets/income.svg';
+import outcomeIcon from '../../assets/outcome.svg';
+import totalIcon from '../../assets/total.svg';
 import Header from '../../components/Header';
-
+import api from '../../services/api';
 import formatValue from '../../utils/formatValue';
-
-import { Container, CardContainer, Card, TableContainer } from './styles';
+import { Card, CardContainer, Container, TableContainer } from './styles';
 
 interface Transaction {
   id: string;
@@ -29,13 +25,66 @@ interface Balance {
   total: string;
 }
 
+interface TransactionApi {
+  id: string;
+  title: string;
+  type: 'income' | 'outcome';
+  value: string;
+  created_at: string;
+  category: {
+    title: string;
+  };
+}
+
+interface BalanceApi {
+  income: number;
+  outcome: number;
+  total: number;
+}
+
+interface TransactionsResponse {
+  transactions: TransactionApi[];
+  balance: BalanceApi;
+}
+
+const parseTransaction = (transactionApi: TransactionApi): Transaction => {
+  const value = Number(transactionApi.value);
+  const created_at = new Date(transactionApi.created_at);
+  return {
+    id: transactionApi.id,
+    title: transactionApi.title,
+    type: transactionApi.type,
+    value,
+    formattedValue: formatValue(Number(transactionApi.value)),
+    formattedDate: format(created_at, 'dd/MM/yyyy'),
+    created_at,
+    category: {
+      title: transactionApi.category.title,
+    },
+  };
+};
+
+const parseBalance = ({ income, outcome, total }: BalanceApi): Balance => {
+  return {
+    income: formatValue(income),
+    outcome: formatValue(outcome),
+    total: formatValue(total),
+  };
+};
+
 const Dashboard: React.FC = () => {
-  // const [transactions, setTransactions] = useState<Transaction[]>([]);
-  // const [balance, setBalance] = useState<Balance>({} as Balance);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [balance, setBalance] = useState<Balance | null>(null);
 
   useEffect(() => {
     async function loadTransactions(): Promise<void> {
-      // TODO
+      try {
+        const { data } = await api.get<TransactionsResponse>('transactions');
+        setTransactions(data.transactions.map(parseTransaction));
+        setBalance(parseBalance(data.balance));
+      } catch (error) {
+        // console.log(error);
+      }
     }
 
     loadTransactions();
@@ -43,29 +92,29 @@ const Dashboard: React.FC = () => {
 
   return (
     <>
-      <Header />
+      <Header page="dashboard" />
       <Container>
         <CardContainer>
           <Card>
             <header>
               <p>Entradas</p>
-              <img src={income} alt="Income" />
+              <img src={incomeIcon} alt="Income" />
             </header>
-            <h1 data-testid="balance-income">R$ 5.000,00</h1>
+            <h1 data-testid="balance-income">{balance && balance.income}</h1>
           </Card>
           <Card>
             <header>
               <p>Saídas</p>
-              <img src={outcome} alt="Outcome" />
+              <img src={outcomeIcon} alt="Outcome" />
             </header>
-            <h1 data-testid="balance-outcome">R$ 1.000,00</h1>
+            <h1 data-testid="balance-outcome">{balance && balance.outcome}</h1>
           </Card>
           <Card total>
             <header>
               <p>Total</p>
-              <img src={total} alt="Total" />
+              <img src={totalIcon} alt="Total" />
             </header>
-            <h1 data-testid="balance-total">R$ 4000,00</h1>
+            <h1 data-testid="balance-total">{balance && balance.total}</h1>
           </Card>
         </CardContainer>
 
@@ -81,18 +130,17 @@ const Dashboard: React.FC = () => {
             </thead>
 
             <tbody>
-              <tr>
-                <td className="title">Computer</td>
-                <td className="income">R$ 5.000,00</td>
-                <td>Sell</td>
-                <td>20/04/2020</td>
-              </tr>
-              <tr>
-                <td className="title">Website Hosting</td>
-                <td className="outcome">- R$ 1.000,00</td>
-                <td>Hosting</td>
-                <td>19/04/2020</td>
-              </tr>
+              {transactions.map(transaction => (
+                <tr key={transaction.id}>
+                  <td className="title">{transaction.title}</td>
+                  <td className={transaction.type}>
+                    {transaction.type === 'outcome' && '- '}
+                    {transaction.formattedValue}
+                  </td>
+                  <td>{transaction.category.title}</td>
+                  <td>{transaction.formattedDate}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </TableContainer>
